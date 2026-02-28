@@ -122,7 +122,6 @@ FUNCTIONS = {
         "code": "F1", "type": "Unimodal",
         "latex": r"f(x) = \sum_{i=1}^{D} x_i^{\,2}",
         "range": (-100, 100),
-        "global_min": "0  at  x = (0, …, 0)",
         "fn":   lambda x: float(np.sum(x**2)),
         "fn2d": lambda X, Y: X**2 + Y**2,
     },
@@ -130,7 +129,6 @@ FUNCTIONS = {
         "code": "F2", "type": "Unimodal",
         "latex": r"f(x) = \sum_{i=1}^{D}|x_i| + \prod_{i=1}^{D}|x_i|",
         "range": (-10, 10),
-        "global_min": "0  at  x = (0, …, 0)",
         "fn":   lambda x: float(np.sum(np.abs(x)) + np.prod(np.abs(x))),
         "fn2d": lambda X, Y: np.abs(X) + np.abs(Y) + np.abs(X)*np.abs(Y),
     },
@@ -138,7 +136,6 @@ FUNCTIONS = {
         "code": "F5", "type": "Unimodal",
         "latex": r"f(x) = \sum_{i=1}^{D-1}\!\left[100(x_i^2 - x_{i+1})^2 + (1-x_i)^2\right]",
         "range": (-30, 30),
-        "global_min": "0  at  x = (1, …, 1)",
         "fn":   lambda x: float(np.sum(100*(x[:-1]**2 - x[1:])**2 + (1 - x[:-1])**2)),
         "fn2d": lambda X, Y: 100*(X**2 - Y)**2 + (1 - X)**2,
     },
@@ -146,7 +143,6 @@ FUNCTIONS = {
         "code": "F7", "type": "Unimodal",
         "latex": r"f(x) = \sum_{i=1}^{D} i\,x_i^4 + \mathrm{rand}(0,1)",
         "range": (-1.28, 1.28),
-        "global_min": "≈ 0  (stochastic noise)",
         "fn":   lambda x: float(np.sum(np.arange(1, len(x)+1)*x**4) + np.random.rand()),
         "fn2d": lambda X, Y: 1*X**4 + 2*Y**4,
     },
@@ -154,7 +150,6 @@ FUNCTIONS = {
         "code": "F8", "type": "Multimodal",
         "latex": r"f(x) = \sum_{i=1}^{D}\!\left(-x_i\sin\!\left(\sqrt{|x_i|}\right)\right)",
         "range": (-500, 500),
-        "global_min": "≈ −418.98·D  at  x ≈ (420.97, …)",
         "fn":   lambda x: float(np.sum(-x*np.sin(np.sqrt(np.abs(x))))),
         "fn2d": lambda X, Y: -X*np.sin(np.sqrt(np.abs(X))) - Y*np.sin(np.sqrt(np.abs(Y))),
     },
@@ -162,7 +157,6 @@ FUNCTIONS = {
         "code": "F9", "type": "Multimodal",
         "latex": r"f(x) = \sum_{i=1}^{D}\!\left[x_i^2 - 10\cos(2\pi x_i) + 10\right]",
         "range": (-5.12, 5.12),
-        "global_min": "0  at  x = (0, …, 0)",
         "fn":   lambda x: float(np.sum(x**2 - 10*np.cos(2*np.pi*x) + 10)),
         "fn2d": lambda X, Y: (X**2 - 10*np.cos(2*np.pi*X)+10) + (Y**2 - 10*np.cos(2*np.pi*Y)+10),
     },
@@ -170,7 +164,6 @@ FUNCTIONS = {
         "code": "F11", "type": "Multimodal",
         "latex": r"f(x) = 1 + \frac{1}{4000}\sum_{i=1}^{D}x_i^2 - \prod_{i=1}^{D}\cos\!\left(\frac{x_i}{\sqrt{i}}\right)",
         "range": (-600, 600),
-        "global_min": "0  at  x = (0, …, 0)",
         "fn":   lambda x: float(1 + np.sum(x**2)/4000 - np.prod(np.cos(x/np.sqrt(np.arange(1,len(x)+1))))),
         "fn2d": lambda X, Y: 1 + (X**2+Y**2)/4000 - np.cos(X)*np.cos(Y/np.sqrt(2)),
     },
@@ -317,14 +310,176 @@ st.markdown(
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ═════════════════════════════════════════════════════════════════════════════
-# 3D SURFACE
-# ═════════════════════════════════════════════════════════════════════════════
-st.markdown("### 3D Landscape")
-st.caption("Interactive surface (2D cross-section, x₃…xD fixed at 0) · Drag to rotate · Scroll to zoom")
-
-with st.spinner("Rendering surface…"):
-    st.plotly_chart(make_surface(info), use_container_width=True)
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# POPULATION INITIALIZATION SECTION
+# Add this block at the end of your existing app (after the 3D surface section)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ── Additional session state ──────────────────────────────────────────────────
+if "population"  not in st.session_state: st.session_state.population  = None
+if "pop_fitness" not in st.session_state: st.session_state.pop_fitness = None
+if "pop_best"    not in st.session_state: st.session_state.pop_best    = None
+if "pop_worst"   not in st.session_state: st.session_state.pop_worst   = None
+
+# ─────────────────────────────────────────────────────────────────────────────
+st.markdown("## Population Initialization")
 st.markdown("---")
+
+# ── ROW 1 : Population slider + Generate button ───────────────────────────────
+col_pop_label, col_pop_slider, col_pop_btn = st.columns([1, 5, 2])
+
+with col_pop_label:
+    st.markdown("**Population:**")
+
+with col_pop_slider:
+    st.caption("Size")
+    pop_size = st.slider("pop_size", min_value=5, max_value=200, value=30,
+                         label_visibility="collapsed")
+
+with col_pop_btn:
+    st.write("")
+    if st.button("Generate population"):
+        st.session_state.population  = np.random.uniform(low, high, (int(pop_size), int(D)))
+        st.session_state.pop_fitness = None
+        st.session_state.pop_best    = None
+        st.session_state.pop_worst   = None
+
+# ── File uploader (CSV) ───────────────────────────────────────────────────────
+uploaded_csv = st.file_uploader(
+    "Upload a population CSV (rows = individuals, cols = dimensions)",
+    type=["csv"], label_visibility="visible"
+)
+if uploaded_csv is not None:
+    import pandas as pd
+    from io import StringIO
+    try:
+        raw       = uploaded_csv.read().decode("utf-8")
+        delimiter = ";" if ";" in raw.split("\n")[0] else ","
+        df_pop    = pd.read_csv(StringIO(raw), header=None, sep=delimiter)
+        st.session_state.population  = df_pop.values.astype(float)
+        st.session_state.pop_fitness = None
+        st.session_state.pop_best    = None
+        st.session_state.pop_worst   = None
+        st.success(
+            f"✅ Loaded population: {st.session_state.population.shape[0]} individuals "
+            f"× {st.session_state.population.shape[1]} dimensions."
+        )
+    except Exception as e:
+        st.error(f"Could not parse CSV: {e}")
+
+st.write("")
+
+# ── Evaluate button ───────────────────────────────────────────────────────────
+if st.button("Evaluate population"):
+    pop = st.session_state.population
+    if pop is None:
+        st.warning("Generate or upload a population first.")
+    elif pop.shape[1] != int(D):
+        st.warning(f"Population has {pop.shape[1]} dimensions but D = {int(D)}.")
+    else:
+        fitnesses = np.array([info["fn"](ind) for ind in pop])
+        st.session_state.pop_fitness = fitnesses
+        st.session_state.pop_best    = float(np.min(fitnesses))
+        st.session_state.pop_worst   = float(np.max(fitnesses))
+
+# ── Best / Worst badge — always rendered outside any column/button block ──────
+if st.session_state.pop_best is not None:
+    st.markdown(
+        f'<div style="background:#4c1d95;border:1.5px solid #7c3aed;border-radius:8px;'
+        f'padding:10px 18px;display:inline-block;font-size:1rem;margin:8px 0;">'
+        f'<b>Best</b> — {st.session_state.pop_best:.2f},&nbsp;&nbsp;'
+        f'<b>Worst</b> — {st.session_state.pop_worst:.2f}'
+        f'</div>',
+        unsafe_allow_html=True
+    )
+
+st.write("")
+
+# ── Plots: 3D surface (left) + Scatter plot (right) ──────────────────────────
+if st.session_state.population is not None:
+    pop    = st.session_state.population
+    lo, hi = info["range"]
+
+    col_surf, col_scatter = st.columns([1, 1])
+
+    # ── Left: 3D surface ──────────────────────────────────────────────────────
+    with col_surf:
+        st.markdown(f"**Function ({info['code']}-{'UM' if info['type']=='Unimodal' else 'MM'})**")
+        with st.spinner("Rendering…"):
+            st.plotly_chart(make_surface(info), use_container_width=True, key="pop_surface")
+
+    # ── Right: Scatter plot (2D or 1D depending on dimensions) ───────────────
+    with col_scatter:
+        fn_label = f"{info['code']}-{'UM' if info['type'] == 'Unimodal' else 'MM'}"
+        st.markdown(f"**Scatter Plot ({fn_label})**")
+
+        fig_s = go.Figure()
+
+        best_idx = (int(np.argmin(st.session_state.pop_fitness))
+                    if st.session_state.pop_fitness is not None else None)
+
+        if pop.shape[1] >= 2:
+            # ── 2D scatter: X1 vs X2 ─────────────────────────────────────────
+            fig_s.add_trace(go.Scatter(
+                x=pop[:, 0], y=pop[:, 1],
+                mode="markers",
+                marker=dict(color="#7c3aed", size=8, opacity=0.65,
+                            line=dict(color="white", width=0.5)),
+                name="Population",
+            ))
+            if best_idx is not None:
+                fig_s.add_trace(go.Scatter(
+                    x=[pop[best_idx, 0]], y=[pop[best_idx, 1]],
+                    mode="markers",
+                    marker=dict(color="red", size=18, symbol="star",
+                                line=dict(color="white", width=1)),
+                    name="Best",
+                ))
+            fig_s.update_layout(
+                xaxis_title="X1", yaxis_title="X2",
+                title=dict(text="Scatter Plot 2D", x=0.5,
+                           font=dict(size=13, color="#a78bfa")),
+            )
+
+        else:
+            # ── 1D scatter: index vs value ────────────────────────────────────
+            indices = np.arange(len(pop))
+            fig_s.add_trace(go.Scatter(
+                x=indices, y=pop[:, 0],
+                mode="markers",
+                marker=dict(color="#7c3aed", size=8, opacity=0.65,
+                            line=dict(color="white", width=0.5)),
+                name="Population",
+            ))
+            if best_idx is not None:
+                fig_s.add_trace(go.Scatter(
+                    x=[best_idx], y=[pop[best_idx, 0]],
+                    mode="markers",
+                    marker=dict(color="red", size=18, symbol="star",
+                                line=dict(color="white", width=1)),
+                    name="Best",
+                ))
+            fig_s.update_layout(
+                xaxis_title="Index", yaxis_title="Value",
+                title=dict(text="Scatter Plot 1D", x=0.5,
+                           font=dict(size=13, color="#a78bfa")),
+            )
+
+        fig_s.update_layout(
+            height=500,
+            margin=dict(l=0, r=0, t=50, b=40),
+            paper_bgcolor="rgba(26,10,46,0)",
+            plot_bgcolor="rgba(26,10,46,0.4)",
+            font=dict(family="Outfit, sans-serif", color="#c084fc"),
+            showlegend=True,
+            legend=dict(font=dict(color="#c084fc", size=11),
+                        bgcolor="rgba(0,0,0,0)"),
+            xaxis=dict(gridcolor="#4c1d95", zerolinecolor="#4c1d95",
+                       tickfont=dict(color="#c084fc")),
+            yaxis=dict(gridcolor="#4c1d95", zerolinecolor="#4c1d95",
+                       tickfont=dict(color="#c084fc")),
+        )
+
+        st.plotly_chart(fig_s, use_container_width=True, key="pop_scatter")
